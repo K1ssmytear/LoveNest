@@ -1,0 +1,72 @@
+--- a/server.py
++++ b/server.py
+@@ -1744,6 +1744,69 @@
+         ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+     }.get(p.suffix.lower(), "application/octet-stream")
+     return FileResponse(str(p), media_type=media)
++
++
++# 用户本人的头像和会话（AI）头像存在同一个地方，靠这个名字区分；不要和任何会话名重名。
++MY_AVATAR_KEY = "me"
++
++
++@app.post("/api/me/avatar")
++async def api_my_avatar_upload(file: UploadFile = File(...), _=Depends(require_auth)):
++    import os as _os
++    raw = await file.read()
++    ext = _os.path.splitext(file.filename or "")[1].lower() or ".jpg"
++    res = _tm.save_avatar(MY_AVATAR_KEY, raw, ext)
++    if not res.get("ok"):
++        raise HTTPException(400, res.get("error", "avatar upload failed"))
++    return res
++
++
++@app.get("/api/me/avatar")
++def api_my_avatar_get(_=Depends(_require_auth_qs)):
++    p = _tm.find_avatar_path(MY_AVATAR_KEY)
++    if p is None:
++        raise HTTPException(404, "no avatar")
++    media = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif"}.get(p.suffix.lower(), "application/octet-stream")
++    return FileResponse(str(p), media_type=media)
++
++
++@app.post("/api/sessions/{name}/pov-snaps")
++async def api_pov_snap_upload(name: str, file: UploadFile = File(...), _=Depends(require_auth)):
++    import uuid as _uuid
++    from pathlib import Path as _Path
++    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", name or ""):
++        raise HTTPException(400, "invalid session name")
++    raw = await file.read()
++    if not raw.startswith(b"\x89PNG\r\n\x1a\n") or len(raw) > 8 * 1024 * 1024:
++        raise HTTPException(400, "invalid or oversized PNG")
++    folder = _Path(CHAT_DATA_DIR) / "pov_snaps" / name
++    folder.mkdir(parents=True, exist_ok=True)
++    filename = _uuid.uuid4().hex + ".png"
++    (folder / filename).write_bytes(raw)
++    return {"path": f"/api/sessions/{name}/pov-snaps/{filename}"}
++
++
++@app.get("/api/sessions/{name}/pov-snaps")
++def api_pov_snap_list(name: str, _=Depends(require_auth)):
++    from pathlib import Path as _Path
++    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", name or ""):
++        raise HTTPException(400, "invalid session name")
++    folder = _Path(CHAT_DATA_DIR) / "pov_snaps" / name
++    if not folder.exists():
++        return {"snapshots": []}
++    files = sorted(folder.glob("[0-9a-f]" * 32 + ".png"), key=lambda p: p.stat().st_mtime, reverse=True)[:50]
++    return {"snapshots": [{"name": p.name, "path": f"/api/sessions/{name}/pov-snaps/{p.name}", "created_at": p.stat().st_mtime} for p in files]}
++
++
++@app.get("/api/sessions/{name}/pov-snaps/{filename}")
++def api_pov_snap_get(name: str, filename: str, _=Depends(_require_auth_qs)):
++    from pathlib import Path as _Path
++    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", name or "") or not re.fullmatch(r"[0-9a-f]{32}\.png", filename or ""):
++        raise HTTPException(400, "invalid path")
++    p = _Path(CHAT_DATA_DIR) / "pov_snaps" / name / filename
++    if not p.is_file():
++        raise HTTPException(404, "snapshot not found")
++    return FileResponse(str(p), media_type="image/png")
+ 
+ 
+ @app.post("/api/sessions/{name}/archive")
