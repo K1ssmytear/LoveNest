@@ -1,10 +1,14 @@
 <!doctype html>
 <html lang="zh">
 <!-- 喵喵铃 · 界面模板（LoveNest / 作者：我厌）
-     这是静态演示：点「摇铃」只播动画，不会真的发出去。
-     接到你自己的后端时：给 <form> 加 method="post"，给三个输入框加 name（name / message / urgency），
-     把 ring() 里的 e.preventDefault() 换成真正的提交，成功后再弹「铃摇过了」。
-     要改的文字都在 <body> 里，搜「TA」就能找到。配色在 PAL 里。 -->
+     默认是演示模式（DEMO = true）：点「摇铃」只播动画，不会真的发出去。
+     接到你自己的后端：把脚本里的 DEMO 改成 false。
+       · 提交方式：在当前页面里用 fetch 往同一个地址 POST，表单编码（application/x-www-form-urlencoded），
+         字段 name / message / urgency（0 不急、1 有点急、2 很急），不跳页。
+       · 后端返回：200 = 收到（弹「铃摇过了」），400 = 没填全，429 = 这条链接发太多次了；
+         网络出意外会自动退回普通的表单提交，保证送得出去。
+       · 如果你的后端设了 CSP，记得放行内联脚本、data: 图片和 connect-src 'self'。
+     要改的文字都在 <body> 里，搜「TA」就能找到。配色在 PAL 里，底色同时写在最上面的 :root 里（防止加载时闪色）。 -->
 <head>
 <meta charset="utf-8">
 <meta name="theme-color" content="#ffe4ee">
@@ -129,6 +133,7 @@ input:checked + .fd.hot .nm{background:var(--rose-d);color:var(--w)}
 .deco span{position:absolute;image-rendering:pixelated}
 body.dark .cap,body.dark .sw button{color:#e9d3dc}
 body.dark .sw .chip{border-color:#fff;box-shadow:1px 1px 0 #fff}
+.errl{margin:3px 3px 0;padding:6px 10px;font-size:12.5px;color:var(--rose-d);background:var(--w);border:1px solid var(--rose-d)}
 </style>
 </head>
 <body>
@@ -139,30 +144,31 @@ body.dark .sw .chip{border-color:#fff;box-shadow:1px 1px 0 #fff}
 </div>
 
 <div class="stage"><div class="deco" id="deco"></div>
-  <form class="win" id="win" onsubmit="return ring(event)">
+  <form class="win" id="win" method="post" autocomplete="off" onsubmit="return ring(event)">
     <div class="title" id="drag">
       <span class="bx"></span><span class="st"></span>
       <span class="nm px">喵喵铃 ♪</span>
       <span class="st"></span><span class="bx zm"></span>
     </div>
     <div class="status px"><span id="mini"></span>急事专用 · 留言先交给 TA 的 AI</div>
+    <div id="errbox"></div>
     <div class="frame">
       <div class="content">
         <div>
           <div class="lbl px"><span class="tag" data-i="card"></span>你是谁</div>
-          <input class="inp inset" maxlength="30" placeholder="名字，或者 TA 平时怎么叫你">
+          <input class="inp inset" name="name" maxlength="30" placeholder="名字，或者 TA 平时怎么叫你">
         </div>
         <div>
           <div class="lbl px"><span class="tag" data-i="note"></span>什么事</div>
-          <textarea class="inp inset" id="msg" maxlength="500" placeholder="说清楚出了什么事、需要 TA 做什么"></textarea>
+          <textarea class="inp inset" id="msg" name="message" maxlength="500" placeholder="说清楚出了什么事、需要 TA 做什么"></textarea>
           <div class="cnt px" id="cnt">0 / 500</div>
         </div>
         <div>
           <div class="lbl px"><span class="tag" data-i="clock"></span>急不急</div>
           <div class="fds">
-            <input type="radio" name="u" id="u0" checked><label for="u0" class="fd"><span class="ic" data-f="0"></span><span class="nm px">不急</span></label>
-            <input type="radio" name="u" id="u1"><label for="u1" class="fd"><span class="ic" data-f="1"></span><span class="nm px">有点急</span></label>
-            <input type="radio" name="u" id="u2"><label for="u2" class="fd hot"><span class="ic" data-f="2"></span><span class="nm px">很急</span></label>
+            <input type="radio" name="urgency" value="0" id="u0" checked><label for="u0" class="fd"><span class="ic" data-f="0"></span><span class="nm px">不急</span></label>
+            <input type="radio" name="urgency" value="1" id="u1"><label for="u1" class="fd"><span class="ic" data-f="1"></span><span class="nm px">有点急</span></label>
+            <input type="radio" name="urgency" value="2" id="u2"><label for="u2" class="fd hot"><span class="ic" data-f="2"></span><span class="nm px">很急</span></label>
           </div>
         </div>
         <button class="ring" id="btn" type="submit"><span class="b px"><span class="bell" id="bell"></span>摇铃</span></button>
@@ -179,7 +185,7 @@ body.dark .sw .chip{border-color:#fff;box-shadow:1px 1px 0 #fff}
 <div class="dlg" id="dlg">
   <div class="in">
     <span id="bigbell"></span>
-    <div class="tx px"><b>铃摇过了</b>留言已经交出去。<br>急的话 TA 很快会醒，不用再发一遍。</div>
+    <div class="tx px"><b id="dlgT">铃摇过了</b><span id="dlgB"></span></div>
   </div>
   <div class="ok"><button class="ring" onclick="closeDlg()"><span class="b px">好</span></button></div>
 </div>
@@ -244,25 +250,49 @@ msg.addEventListener('input',()=>cnt.textContent=msg.value.length+' / 500');
 function tick(){const d=new Date();document.getElementById('clk').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')}
 tick();setInterval(tick,20000);
 
-/* 摇铃 → 铃铛晃三下 → 老 Mac 的虚线框放大 → 对话框 */
+/* 摇铃：铃铛晃三下 → 送出 → 老 Mac 的虚线框放大 → 同一页里弹出对话框 */
+const DEMO=true;   /* 接后端时改成 false */
+let sent=false;
+function zoomTo(r,done){
+  const W=280,H=150,cx=innerWidth/2,cy=innerHeight*.42;
+  for(let i=1;i<=6;i++)setTimeout(()=>{
+    const t=i/6,z=document.createElement('div');z.className='zoom';
+    const w=r.width+(W-r.width)*t,h=r.height+(H-r.height)*t;
+    const x=(r.left+r.width/2)+(cx-(r.left+r.width/2))*t-w/2,y=(r.top+r.height/2)+(cy-(r.top+r.height/2))*t-h/2;
+    Object.assign(z.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});
+    document.body.appendChild(z);setTimeout(()=>z.remove(),160);
+    if(i==6)setTimeout(done,120);
+  },i*45);
+}
+function showDlg(t,body){
+  document.getElementById('dlgT').textContent=t;
+  document.getElementById('dlgB').innerHTML=body;
+  zoomTo(document.getElementById('btn').getBoundingClientRect(),()=>document.getElementById('dlg').style.display='block');
+}
+function setErr(t){const e=document.getElementById('errbox');e.innerHTML='';if(t){const d=document.createElement('div');d.className='errl px';d.textContent=t;e.appendChild(d)}}
+const OK_TEXT='留言已经送到。<br>急的话 TA 很快会醒，不用再发一遍。';
+const LIMIT_TEXT='这条链接最近已经发过几次了。<br>前面的话已经收到。涉及人身安全，请直接打电话或拨 110 / 120。';
 function ring(e){
   e.preventDefault();
+  if(sent)return false;
+  const f=document.getElementById('win');
+  if(!f.elements['name'].value.trim()||!f.elements['message'].value.trim()){setErr('「你是谁」和「什么事」都要填。');return false}
+  setErr('');sent=true;
   const b=document.getElementById('btn');b.classList.remove('shake');void b.offsetWidth;b.classList.add('shake');
-  const r=b.getBoundingClientRect(),dlg=document.getElementById('dlg');
-  const W=280,H=150,cx=innerWidth/2,cy=innerHeight*.42;
-  setTimeout(()=>{
-    for(let i=1;i<=6;i++)setTimeout(()=>{
-      const t=i/6,z=document.createElement('div');z.className='zoom';
-      const w=r.width+(W-r.width)*t,h=r.height+(H-r.height)*t;
-      const x=(r.left+r.width/2)+(cx-(r.left+r.width/2))*t-w/2,y=(r.top+r.height/2)+(cy-(r.top+r.height/2))*t-h/2;
-      Object.assign(z.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});
-      document.body.appendChild(z);setTimeout(()=>z.remove(),160);
-      if(i==6)setTimeout(()=>dlg.style.display='block',120);
-    },i*45);
-  },1500);
+  const wait=new Promise(r=>setTimeout(r,1300));
+  const ok=()=>{showDlg('铃摇过了',OK_TEXT);f.elements['message'].value='';msg.dispatchEvent(new Event('input'));document.getElementById('u0').checked=true};
+  if(DEMO){wait.then(ok);return false}
+  const fallback=()=>{sent=false;f.submit()};
+  fetch(location.href,{method:'POST',body:new URLSearchParams(new FormData(f)),credentials:'same-origin',cache:'no-store'})
+    .then(res=>wait.then(()=>{
+      if(res.status===200)ok();
+      else if(res.status===429)showDlg('先等一等',LIMIT_TEXT);
+      else if(res.status===400){sent=false;b.classList.remove('shake');setErr('「你是谁」和「什么事」都要填。')}
+      else fallback();
+    }),fallback);
   return false;
 }
-function closeDlg(){document.getElementById('dlg').style.display='none'}
+function closeDlg(){document.getElementById('dlg').style.display='none';sent=false;document.getElementById('btn').classList.remove('shake')}
 </script>
 </body>
 </html>
