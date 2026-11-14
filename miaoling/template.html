@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh">
+<!-- 喵喵铃 · 界面模板（LoveNest / 作者：我厌）
+     这是静态演示：点「摇铃」只播动画，不会真的发出去。
+     接到你自己的后端时：给 <form> 加 method="post"，给三个输入框加 name（name / message / urgency），
+     把 ring() 里的 e.preventDefault() 换成真正的提交，成功后再弹「铃摇过了」。
+     要改的文字都在 <body> 里，搜「TA」就能找到。配色在 PAL 里。 -->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>喵喵铃</title>
+<style>
+:root{
+  --k:#4a4644;      /* 描边 */
+  --d:#8e8986;      /* 暗面 */
+  --m:#c7c2bd;      /* 中灰 */
+  --l:#ece9e5;      /* 亮面 */
+  --w:#fbfaf8;      /* 高光 */
+  --ink:#3b3836;
+  --mute:#8a8581;
+  --rose:#c4a0a6;
+  --rose-d:#8c626a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  color:var(--ink);overflow-x:hidden;
+  font-family:-apple-system,"PingFang SC","Hiragino Sans GB",sans-serif;
+  /* 桌面：两色抖动网点 */
+}
+/* 一层很淡的颗粒，像旧显示器 */
+body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.035;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .24 0 0 0 0 .27 0 0 0 0 .32 0 0 0 .9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.px{font-family:"Zpix","Fusion Pixel","DotGothic16","PingFang SC",monospace;-webkit-font-smoothing:none;letter-spacing:.4px}
+
+/* ===== 顶部菜单栏 ===== */
+.menubar{position:sticky;top:0;z-index:5;height:24px;background:var(--w);
+  border-bottom:1px solid var(--k);display:flex;align-items:center;gap:16px;padding:0 10px;font-size:13px}
+.menubar .r{margin-left:auto;color:var(--mute)}
+.menubar svg{display:block}
+
+.stage{position:relative;padding:22px 12px 60px;display:flex;flex-direction:column;align-items:center}
+
+/* ===== 窗口：白色内高光 + 暗色内阴影 + 1px 硬投影 = 老 Mac 立体感 ===== */
+.win{position:relative;width:100%;max-width:372px;background:var(--l);
+  border:1px solid var(--k);
+  box-shadow:inset 1px 1px 0 var(--w),inset -1px -1px 0 var(--d),2px 2px 0 color-mix(in srgb,var(--k) 55%,transparent)}
+.title{height:22px;margin:3px 3px 0;display:flex;align-items:center;gap:6px;padding:0 3px;user-select:none}
+.title .bx{flex:none;width:13px;height:13px;border:1px solid var(--k);background:var(--l);
+  box-shadow:inset 1px 1px 0 var(--d),inset -1px -1px 0 var(--w)}
+.title .bx.zm{background:linear-gradient(var(--k),var(--k)) 2px 2px/6px 1px no-repeat,linear-gradient(var(--k),var(--k)) 2px 2px/1px 6px no-repeat,var(--l)}
+.title .st{flex:1;height:11px;background:repeating-linear-gradient(to bottom,var(--d) 0 1px,var(--w) 1px 2px)}
+.title .nm{font-size:13px;padding:0 6px;white-space:nowrap}
+.status{margin:3px 3px 0;height:22px;display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:11.5px;color:var(--mute);background:var(--l);
+  border:1px solid var(--k);border-bottom:0;box-shadow:inset 1px 1px 0 var(--w)}
+.frame{margin:0 3px 3px;display:flex;border:1px solid var(--k);background:var(--w)}
+.content{flex:1;padding:16px 14px 18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* 滚动条：抖动网点轨道 + 凸起滑块 */
+.sb{width:15px;border-left:1px solid var(--k);display:flex;flex-direction:column;
+}
+.sb .a{height:15px;background:var(--l);border-bottom:1px solid var(--k);display:flex;align-items:center;justify-content:center;box-shadow:inset 1px 1px 0 var(--w),inset -1px -1px 0 var(--d)}
+.sb .a.dn{margin-top:auto;border-bottom:0;border-top:1px solid var(--k)}
+.sb .th{height:30px;margin-top:34px;background:var(--l);border-top:1px solid var(--k);border-bottom:1px solid var(--k);
+  box-shadow:inset 1px 1px 0 var(--w),inset -1px -1px 0 var(--d);
+  background-image:repeating-linear-gradient(to bottom,transparent 0 10px,var(--d) 10px 11px,var(--w) 11px 12px);background-size:7px 100%;background-position:center;background-repeat:no-repeat}
+.tri{width:0;height:0;border:3.5px solid transparent;border-bottom:4px solid var(--k);border-top:0}
+.tri.d{border-bottom:0;border-top:4px solid var(--k)}
+
+/* ===== 表单 ===== */
+.lbl{display:flex;align-items:center;gap:6px;font-size:12.5px;margin-bottom:6px}
+.inset{border:1px solid var(--k);box-shadow:inset 1px 1px 0 var(--d),inset 2px 2px 0 rgba(142,137,134,.25)}
+.inp{width:100%;background:#fff;border-radius:0;outline:none;
+  font:15px/22px -apple-system,"PingFang SC",sans-serif;color:var(--ink);padding:5px 9px}
+.inp::placeholder{color:#b3aeaa}
+.inp:focus{box-shadow:inset 1px 1px 0 var(--d),0 0 0 2px var(--m)}
+/* 什么事：横格信纸 */
+textarea.inp{height:140px;resize:none;padding:6px 9px;
+  background:#fff repeating-linear-gradient(to bottom,transparent 0 21px,#e7e2e4 21px 22px);background-position:0 6px;background-attachment:local}
+.cnt{font-size:11px;color:var(--mute);text-align:right;margin-top:3px}
+
+/* 急不急：像素文件夹 */
+.fds{display:flex;justify-content:space-around;padding-top:2px}
+.fds input{position:absolute;opacity:0;pointer-events:none}
+.fd{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;width:80px}
+.fd .ic{position:relative;width:54px;height:45px}
+.fd .ic svg{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated}
+.fd .ic .on{opacity:0}
+.fd .nm{font-size:12px;padding:1px 5px}
+input:checked + .fd .ic .on{opacity:1}
+input:checked + .fd .ic .off{opacity:0}
+input:checked + .fd .ic{animation:hop .36s steps(3) 1}
+input:checked + .fd .nm{background:var(--k);color:var(--w)}
+input:checked + .fd.hot .nm{background:var(--rose-d);color:var(--w)}
+.fd.hot .nm{color:var(--rose-d)}
+@keyframes hop{0%{transform:translateY(0)}50%{transform:translateY(-4px)}100%{transform:translateY(0)}}
+
+/* 摇铃按钮：Mac 默认按钮的双圈 */
+.ring{align-self:center;margin-top:2px;background:none;border:0;cursor:pointer;
+  padding:3px;border:2px solid var(--k);border-radius:9px}
+.ring .b{display:flex;align-items:center;gap:8px;padding:6px 20px;border:1px solid var(--k);border-radius:6px;
+  background:var(--l);box-shadow:inset 1px 1px 0 var(--w),inset -1px -1px 0 var(--d);font-size:14px;color:var(--ink)}
+.ring:active .b{background:var(--k);color:var(--w);box-shadow:none}
+.ring .bell{width:20px;height:20px;transform-origin:50% 10%}
+.ring.shake .bell{animation:shake .5s steps(2) 3}
+@keyframes shake{0%{transform:rotate(-14deg)}100%{transform:rotate(14deg)}}
+.note{font-size:11px;color:var(--mute);line-height:1.7;text-align:center}
+
+.grow{margin:0 3px 3px;height:15px;display:flex;border:1px solid var(--k);border-top:0;background:var(--l)}
+.grow .g{margin-left:auto;width:15px;border-left:1px solid var(--k);
+  background:linear-gradient(var(--k),var(--k)) 4px 4px/7px 1px no-repeat,linear-gradient(var(--k),var(--k)) 4px 4px/1px 7px no-repeat,
+             linear-gradient(var(--k),var(--k)) 6px 6px/5px 1px no-repeat,linear-gradient(var(--k),var(--k)) 6px 6px/1px 5px no-repeat,var(--l)}
+
+/* ===== 送达对话框 ===== */
+.dlg{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);width:280px;z-index:20;display:none;
+  background:var(--l);border:1px solid var(--k);padding:4px;
+  box-shadow:inset 1px 1px 0 var(--w),inset -1px -1px 0 var(--d),2px 2px 0 color-mix(in srgb,var(--k) 55%,transparent)}
+.dlg .in{border:2px solid var(--k);padding:16px 14px 14px;display:flex;gap:12px;align-items:flex-start}
+.dlg .tx{font-size:13px;line-height:1.7}
+.dlg .tx b{display:block;font-size:14px;margin-bottom:2px}
+.dlg .ok{display:flex;justify-content:flex-end;padding:0 10px 10px;margin-top:-4px}
+.dlg .ring{padding:2px}
+.dlg .ring .b{padding:4px 22px;font-size:13px}
+.zoom{position:fixed;z-index:19;border:1px dotted var(--k);pointer-events:none}
+.cap{font-size:11px;color:var(--mute);margin:22px 0 8px;text-align:center}
+.sw{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+.sw button{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:0;cursor:pointer;color:var(--ink);font-size:11.5px}
+.sw .chip{display:flex;border:1px solid var(--k);box-shadow:1px 1px 0 var(--k)}
+.sw .chip i{width:11px;height:20px;display:block}
+.sw button.cur .nm{background:var(--k);color:var(--w);padding:0 4px}
+.stage{isolation:isolate}
+.deco{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.deco span{position:absolute;image-rendering:pixelated}
+body.dark .cap,body.dark .sw button{color:#e9d3dc}
+body.dark .sw .chip{border-color:#fff;box-shadow:1px 1px 0 #fff}
+</style>
+</head>
+<body>
+
+<div class="menubar px">
+  <span id="logo"></span><span>文件</span><span>编辑</span><span>留言</span>
+  <span class="r" id="clk"></span>
+</div>
+
+<div class="stage"><div class="deco" id="deco"></div>
+  <form class="win" id="win" onsubmit="return ring(event)">
+    <div class="title" id="drag">
+      <span class="bx"></span><span class="st"></span>
+      <span class="nm px">喵喵铃 ♪</span>
+      <span class="st"></span><span class="bx zm"></span>
+    </div>
+    <div class="status px"><span id="mini"></span>急事专用 · 留言先交给 TA 的 AI</div>
+    <div class="frame">
+      <div class="content">
+        <div>
+          <div class="lbl px"><span class="tag" data-i="card"></span>你是谁</div>
+          <input class="inp inset" maxlength="30" placeholder="名字，或者 TA 平时怎么叫你">
+        </div>
+        <div>
+          <div class="lbl px"><span class="tag" data-i="note"></span>什么事</div>
+          <textarea class="inp inset" id="msg" maxlength="500" placeholder="说清楚出了什么事、需要 TA 做什么"></textarea>
+          <div class="cnt px" id="cnt">0 / 500</div>
+        </div>
+        <div>
+          <div class="lbl px"><span class="tag" data-i="clock"></span>急不急</div>
+          <div class="fds">
+            <input type="radio" name="u" id="u0" checked><label for="u0" class="fd"><span class="ic" data-f="0"></span><span class="nm px">不急</span></label>
+            <input type="radio" name="u" id="u1"><label for="u1" class="fd"><span class="ic" data-f="1"></span><span class="nm px">有点急</span></label>
+            <input type="radio" name="u" id="u2"><label for="u2" class="fd hot"><span class="ic" data-f="2"></span><span class="nm px">很急</span></label>
+          </div>
+        </div>
+        <button class="ring" id="btn" type="submit"><span class="b px"><span class="bell" id="bell"></span>摇铃</span></button>
+        <div class="note">真急的事，会马上把 TA 叫醒；<br>不急的，等 TA 睡醒再转告。</div>
+      </div>
+      <div class="sb"><div class="a"><span class="tri"></span></div><div class="th"></div><div class="a dn"><span class="tri d"></span></div></div>
+    </div>
+    <div class="grow"><span class="g"></span></div>
+  </form>
+  <div class="sw px" id="sw" style="display:none"></div>
+  
+</div>
+
+<div class="dlg" id="dlg">
+  <div class="in">
+    <span id="bigbell"></span>
+    <div class="tx px"><b>铃摇过了</b>留言已经交出去。<br>急的话 TA 很快会醒，不用再发一遍。</div>
+  </div>
+  <div class="ok"><button class="ring" onclick="closeDlg()"><span class="b px">好</span></button></div>
+</div>
+
+<script>
+/* ---------- 像素图：字符画 → SVG ----------
+   # 描边  . 亮面  : 灰色抖动  % 灰粉抖动  s 阴影  空格 透明 */
+const PAL={
+ 白粉黑:{k:'#26242a',d:'#a8949d',m:'#f2d3de',l:'#fbf6f8',w:'#ffffff',a:'#eaa6bd',ad:'#c4607f',dk:'#ffe4ee',dk2:'#efbfd0',deco:['#f3b9cc','#26242a','#ffffff']}
+};
+let P=PAL['白粉黑'];
+const dot=(a,b,n)=>`url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='${n}' height='${n}' shape-rendering='crispEdges'><rect width='${n}' height='${n}' fill='${a}'/><rect width='1' height='1' fill='${b}'/><rect x='${n/2}' y='${n/2}' width='1' height='1' fill='${b}'/></svg>`)}")`;
+function svg(map,{acc=false}={}){
+  const h=map.length,w=Math.max(...map.map(r=>r.length));let out='';
+  const C={'#':P.k,'.':P.w,'o':P.l,'s':P.m};
+  map.forEach((row,y)=>{[...row].forEach((ch,x)=>{
+    let f=null;
+    if(ch==':')f=(x+y)%2?(acc?P.a:P.m):P.w;
+    else if(ch=='%')f=(x+y)%2?P.a:P.w;
+    else if(ch=='=')f=(x+y)%4==0?P.a:P.w;
+    else f=C[ch]||null;
+    if(f)out+=`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${f}"/>`;
+  })});
+  return `<svg viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">${out}</svg>`;
+}
+const sized=(s,w,h,st='')=>s.replace('<svg',`<svg width="${w}" height="${h}" style="display:block;${st}"`);
+const FOLDER=[" ######           ","#......#          ","#.......########  ","#..............#  ","#################s","#BBBBBBBBBBBBBBB#s","#BBBBBBBBBBBBBBB#s","#BBBBBBBBBBBBBBB#s","#BBBBBBBBBBBBBBB#s","#BBBBBBBBBBBBBBB#s","#BBBBBBBBBBBBBBB#s","#BBBBBBBBBBBBBBB#s","#################s"," ssssssssssssssss "];
+const FOLDER_OPEN=[" ######           ","#......#          ","#.......########  ","#..............#  ","#..............#  ","#.##################","#.#BBBBBBBBBBBBBBB#s","##BBBBBBBBBBBBBBB#s ","#BBBBBBBBBBBBBBB#s  ","#BBBBBBBBBBBBBBB#s  ","#BBBBBBBBBBBBBBB#s  ","#BBBBBBBBBBBBBBB#s  ","#################s  "," ssssssssssssssss   "];
+const fill=(m,ch)=>m.map(r=>r.replace(/B/g,ch));
+const BELL=["      ####      ","     #....#     ","    #...:::#    ","    #...:::#    ","   #....::::#   ","   #....::::#   ","   #....::::#   ","  #.....:::::#  ","  #.....:::::#  "," #......::::::# ","################","#..............#","################","      #..#      ","       ##       "];
+const CAT=["#   #  ","## ##  ","#####  ","#.#.#  ","#####  "," ### ##"," #####."," ##### "];
+const TAGS={card:["########","#......#","#.##...#","#.##.:.#","#......#","########"],note:["######  ","#....## ","#.::..# ","#.....# ","#.::..# ","#######"],clock:[" #### ","#..#.#","#..#.#","#...##","#....#"," #### "]};
+function render(){
+  const r=document.documentElement.style;
+  [['--k',P.k],['--d',P.d],['--m',P.m],['--l',P.l],['--w',P.w],['--ink',P.k],['--mute',P.d],['--rose',P.a],['--rose-d',P.ad]].forEach(([k,v])=>r.setProperty(k,v));
+  document.body.style.background=P.dk;
+  document.querySelector('.sb').style.background=dot(P.l,P.m,2);
+  document.querySelectorAll('.ic').forEach(el=>{
+    const hot=el.dataset.f==='2';
+    el.innerHTML=svg(fill(FOLDER,hot?'=':'.')).replace('<svg','<svg class="off"')+svg(fill(FOLDER_OPEN,hot?'%':':')).replace('<svg','<svg class="on"');
+  });
+  document.getElementById('bell').innerHTML=sized(svg(BELL),20,19);
+  document.getElementById('bigbell').innerHTML=sized(svg(BELL,{acc:true}),40,38,'flex:none');
+  document.getElementById('logo').innerHTML=sized(svg(CAT),16,16);
+  document.getElementById('mini').innerHTML=sized(svg(BELL),12,12);
+  document.querySelectorAll('.tag').forEach(t=>t.innerHTML=sized(svg(TAGS[t.dataset.i]),14,12));
+  document.querySelectorAll('#sw button').forEach(b=>b.classList.toggle('cur',PAL[b.dataset.p]===P));
+  document.body.classList.toggle('dark',P===PAL['黑粉']);
+  const HEART=[" ## ## ","#######","#######"," ##### ","  ###  ","   #   "];
+  const STAR=["  #  ","  #  ","#####","  #  ","  #  "];
+  const SPOT=[[8,6,64,0],[78,14,40,1],[60,40,90,0],[4,58,46,2],[84,62,70,0],[30,82,52,1],[70,88,38,0],[18,30,28,2],[46,8,24,2],[90,40,30,1]];
+  const pix=(m,c)=>{const w=m[0].length,h=m.length;let o='';m.forEach((r,y)=>[...r].forEach((ch,x)=>{if(ch=='#')o+=`<rect x="${x}" y="${y}" width="1.02" height="1.02" fill="${c}"/>`}));return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" shape-rendering="crispEdges">${o}</svg>`};
+  document.getElementById('deco').innerHTML='';void SPOT.map(([x,y,sz,t],i)=>`<span style="left:${x}%;top:${y}%;width:${sz}px;height:${t==1?sz:Math.round(sz*6/7)}px;opacity:${t==1?.9:.8}">${pix(t==1?STAR:HEART,P.deco[i%3===0?0:(t==1?1:(i%2?2:0))])}</span>`).join('');
+}
+document.getElementById('sw').innerHTML=Object.entries(PAL).map(([n,c])=>`<button type="button" data-p="${n}"><span class="chip"><i style="background:${c.w}"></i><i style="background:${c.l}"></i><i style="background:${c.m}"></i><i style="background:${c.d}"></i><i style="background:${c.a}"></i></span><span class="nm">${n}</span></button>`).join('');
+document.querySelectorAll('#sw button').forEach(b=>b.onclick=()=>{P=PAL[b.dataset.p];render()});
+render();
+
+/* ---------- 小交互 ---------- */
+const msg=document.getElementById('msg'),cnt=document.getElementById('cnt');
+msg.addEventListener('input',()=>cnt.textContent=msg.value.length+' / 500');
+function tick(){const d=new Date();document.getElementById('clk').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0')}
+tick();setInterval(tick,20000);
+
+/* 摇铃 → 铃铛晃三下 → 老 Mac 的虚线框放大 → 对话框 */
+function ring(e){
+  e.preventDefault();
+  const b=document.getElementById('btn');b.classList.remove('shake');void b.offsetWidth;b.classList.add('shake');
+  const r=b.getBoundingClientRect(),dlg=document.getElementById('dlg');
+  const W=280,H=150,cx=innerWidth/2,cy=innerHeight*.42;
+  setTimeout(()=>{
+    for(let i=1;i<=6;i++)setTimeout(()=>{
+      const t=i/6,z=document.createElement('div');z.className='zoom';
+      const w=r.width+(W-r.width)*t,h=r.height+(H-r.height)*t;
+      const x=(r.left+r.width/2)+(cx-(r.left+r.width/2))*t-w/2,y=(r.top+r.height/2)+(cy-(r.top+r.height/2))*t-h/2;
+      Object.assign(z.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});
+      document.body.appendChild(z);setTimeout(()=>z.remove(),160);
+      if(i==6)setTimeout(()=>dlg.style.display='block',120);
+    },i*45);
+  },1500);
+  return false;
+}
+function closeDlg(){document.getElementById('dlg').style.display='none'}
+</script>
+</body>
+</html>
