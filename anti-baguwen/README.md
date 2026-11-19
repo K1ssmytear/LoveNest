@@ -18,6 +18,7 @@
 | `hooks/tone_reminder.sh` | UserPromptSubmit hook：每轮把整份 `口吻清单.md` 注入 `additionalContext` |
 | `hooks/banned_check.py` | Stop hook：查本轮回复，命中禁词就 `block`，要求整条重写；也能单独跑命令行检查 |
 | `hooks/banned_words.json` | 规则表：正则、例外、宏、每条规则自带的单测例句 |
+| `通用思路.md` | 不用 Claude Code 时怎么照着做：酒馆、小手机、自己接 API 的都能用 |
 
 `banned_check.py` 的行为：
 
@@ -67,7 +68,7 @@ python3 ~/.claude/hooks/banned_check.py --selftest   # 应显示 失败 0 句
 
 ## 没有 hook 的平台
 
-把 `口吻清单.md` 的全文贴在系统提示 / 人设的**最末尾**（越靠后越不容易被忽略）。没有检查兜底，效果会打折扣；可以隔一阵把聊天记录里的回复拿出来跑 `banned_check.py --text` 或 `--file`，看哪些说法还在冒，再回头补清单。
+两层的思路换哪个 AI 都能用，具体做法见 [通用思路.md](通用思路.md)。最省事的是：把 `口吻清单.md` 的全文贴在系统提示 / 人设的**最末尾**（越靠后越不容易被忽略）。没有检查兜底，效果会打折扣；可以隔一阵把聊天记录里的回复拿出来跑 `banned_check.py --text` 或 `--file`，看哪些说法还在冒，再回头补清单。
 
 ## 改成自己家的禁词
 
